@@ -1,0 +1,641 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bio-qc-sample
+  namespace: shipper-platform
+  labels:
+    shipper.lingbohome.com/managed: "true"
+    shipper.lingbohome.com/templated-by: "builder"
+    template.shipper.lingbohome.com/version: "0.1.0"
+  annotations:
+    kubesphere.io/alias-name: 生信分析
+    kubesphere.io/creator: system
+    kubesphere.io/description: "基于用户输入的样本集分析"
+    cert.shipper.lingbohome.com/scope: "oss,ssh"
+data:
+  template.yaml: |
+    apiVersion: tekton.dev/v1
+    kind: PipelineRun
+    metadata:
+      annotations:
+        tekton.dev/displayName: Shipper-Bio-QC-Sample
+        tekton.dev/pipelines.minVersion: 0.17.0
+        tekton.dev/platforms: linux/amd64
+        tekton.dev/tags: bio
+      generateName: baesd-shipper
+      labels:
+        app.kubernetes.io/version: '0.3'
+        shipper.lingbohome.com/platform: shipper
+        shipper.lingbohome.com/useFor: builder
+    spec:
+      params:
+        - name: SOURCE_URL
+          value: {{ .Values.sourceUrl }}
+        - name: SOURCE_REFERENCE
+          value: {{ .Values.sourceRef | default "" | quote }}           
+        - name: R1_Fastq_File
+          value: {{ .Values.r1FastqFile | default "./R1_Fastq_File" }}
+        - name: R2_Fastq_File
+          value: {{ .Values.r2FastqFile | default "./R2_Fastq_File" }}                      
+        - name: Sample_Name
+          value: {{ .Values.sampleName | default .Release.PipelineName | quote }}
+        - name: Output_Directory
+          value: {{ .Values.outputDir | default "/tmp" | quote }}      
+      pipelineSpec:
+        description: bio qc sample pipeline..
+        params:
+          - description: A git repo url.
+            name: SOURCE_URL
+            type: string
+          - default: ''
+            description: The branch, tag or SHA to checkout.
+            name: SOURCE_REFERENCE
+            type: string                    
+          - default: ./R1_Fastq_File
+            description: R1 fastq file.
+            name: R1_Fastq_File
+            type: string
+          - default: ./R2_Fastq_File
+            description: R2 fastq file.
+            name: R2_Fastq_File
+            type: string
+          - description: Sample name.
+            name: Sample_Name
+            type: string 
+          - default: /home
+            description: Output directory.
+            name: Output_Directory
+            type: string          
+        tasks:
+          - name: fetch-from-git
+            params:
+              - name: url
+                value: $(params.SOURCE_URL)
+              - name: revision
+                value: $(params.SOURCE_REFERENCE)
+              - name: sslVerify
+                value: 'false'
+            taskSpec:
+              description: |
+                These Tasks are Git tasks to work with repositories used by other tasks in your Pipeline.
+                The git-clone Task will clone a repo from the provided url into the output Workspace. By default the repo will be cloned into the root of your Workspace. You can clone into a subdirectory by setting this Task's subdirectory param. This Task also supports sparse checkouts. To perform a sparse checkout, pass a list of comma separated directory patterns to this Task's sparseCheckoutDirectories param.
+              params:
+                - description: Repository URL to clone from.
+                  name: url
+                  type: string
+                - default: ''
+                  description: Revision to checkout. (branch, tag, sha, ref, etc...)
+                  name: revision
+                  type: string
+                - default: ''
+                  description: Refspec to fetch before checking out revision.
+                  name: refspec
+                  type: string
+                - default: 'true'
+                  description: Initialize and fetch git submodules.
+                  name: submodules
+                  type: string
+                - default: '1'
+                  description: Perform a shallow clone, fetching only the most recent N commits.
+                  name: depth
+                  type: string
+                - default: 'true'
+                  description: Set the `http.sslVerify` global git config. Setting this to `false` is not advised unless you are sure that you trust your git remote.
+                  name: sslVerify
+                  type: string
+                - default: ca-bundle.crt
+                  description: file name of mounted crt using ssl-ca-directory workspace. default value is ca-bundle.crt.
+                  name: crtFileName
+                  type: string
+                - default: ''
+                  description: Subdirectory inside the `output` Workspace to clone the repo into.
+                  name: subdirectory
+                  type: string
+                - default: ''
+                  description: Define the directory patterns to match or exclude when performing a sparse checkout.
+                  name: sparseCheckoutDirectories
+                  type: string
+                - default: 'true'
+                  description: Clean out the contents of the destination directory if it already exists before cloning.
+                  name: deleteExisting
+                  type: string
+                - default: ''
+                  description: HTTP proxy server for non-SSL requests.
+                  name: httpProxy
+                  type: string
+                - default: ''
+                  description: HTTPS proxy server for SSL requests.
+                  name: httpsProxy
+                  type: string
+                - default: ''
+                  description: Opt out of proxying HTTP/HTTPS requests.
+                  name: noProxy
+                  type: string
+                - default: 'true'
+                  description: Log the commands that are executed during `git-clone`'s operation.
+                  name: verbose
+                  type: string
+                - default: registry.cn-shanghai.aliyuncs.com/kube-shipper/tektoncd-pipeline-cmd-git-init:v0.40.2
+                  description: The image providing the git-init binary that this Task runs.
+                  name: gitInitImage
+                  type: string
+                - default: /root
+                  description: |
+                    Absolute path to the user's home directory.
+                    
+                  name: userHome
+                  type: string
+              results:
+                - description: The precise commit SHA that was fetched by this Task.
+                  name: commit
+                  type: string
+                - description: The precise URL that was fetched by this Task.
+                  name: url
+                  type: string
+                - description: The epoch timestamp of the commit that was fetched by this Task.
+                  name: committer-date
+                  type: string
+              steps:
+                - computeResources: {}
+                  env:
+                    - name: HOME
+                      value: $(params.userHome)
+                    - name: PARAM_URL
+                      value: $(params.url)
+                    - name: PARAM_REVISION
+                      value: $(params.revision)
+                    - name: PARAM_REFSPEC
+                      value: $(params.refspec)
+                    - name: PARAM_SUBMODULES
+                      value: $(params.submodules)
+                    - name: PARAM_DEPTH
+                      value: $(params.depth)
+                    - name: PARAM_SSL_VERIFY
+                      value: $(params.sslVerify)
+                    - name: PARAM_CRT_FILENAME
+                      value: $(params.crtFileName)
+                    - name: PARAM_SUBDIRECTORY
+                      value: $(params.subdirectory)
+                    - name: PARAM_DELETE_EXISTING
+                      value: $(params.deleteExisting)
+                    - name: PARAM_HTTP_PROXY
+                      value: $(params.httpProxy)
+                    - name: PARAM_HTTPS_PROXY
+                      value: $(params.httpsProxy)
+                    - name: PARAM_NO_PROXY
+                      value: $(params.noProxy)
+                    - name: PARAM_VERBOSE
+                      value: $(params.verbose)
+                    - name: PARAM_SPARSE_CHECKOUT_DIRECTORIES
+                      value: $(params.sparseCheckoutDirectories)
+                    - name: PARAM_USER_HOME
+                      value: $(params.userHome)
+                    - name: WORKSPACE_OUTPUT_PATH
+                      value: $(workspaces.output.path)
+                    - name: WORKSPACE_SSH_DIRECTORY_BOUND
+                      value: $(workspaces.ssh-directory.bound)
+                    - name: WORKSPACE_SSH_DIRECTORY_PATH
+                      value: $(workspaces.ssh-directory.path)
+                    - name: WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND
+                      value: $(workspaces.basic-auth.bound)
+                    - name: WORKSPACE_BASIC_AUTH_DIRECTORY_PATH
+                      value: $(workspaces.basic-auth.path)
+                    - name: WORKSPACE_SSL_CA_DIRECTORY_BOUND
+                      value: $(workspaces.ssl-ca-directory.bound)
+                    - name: WORKSPACE_SSL_CA_DIRECTORY_PATH
+                      value: $(workspaces.ssl-ca-directory.path)
+                  image: $(params.gitInitImage)
+                  name: clone
+                  script: |
+                    #!/usr/bin/env sh
+                    set -eu
+                    
+                    if [ "${PARAM_VERBOSE}" = "true" ] ; then
+                      set -x
+                    fi
+                    
+                    if [ "${WORKSPACE_BASIC_AUTH_DIRECTORY_BOUND}" = "true" ] ; then
+                      cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.git-credentials" "${PARAM_USER_HOME}/.git-credentials"
+                      cp "${WORKSPACE_BASIC_AUTH_DIRECTORY_PATH}/.gitconfig" "${PARAM_USER_HOME}/.gitconfig"
+                      chmod 400 "${PARAM_USER_HOME}/.git-credentials"
+                      chmod 400 "${PARAM_USER_HOME}/.gitconfig"
+                    fi
+                    
+                    if [ "${WORKSPACE_SSH_DIRECTORY_BOUND}" = "true" ] ; then
+                      cp -R "${WORKSPACE_SSH_DIRECTORY_PATH}" "${PARAM_USER_HOME}"/.ssh
+                      chmod 700 "${PARAM_USER_HOME}"/.ssh
+                      chmod -R 400 "${PARAM_USER_HOME}"/.ssh/*
+                    fi
+                    
+                    if [ "${WORKSPACE_SSL_CA_DIRECTORY_BOUND}" = "true" ] ; then
+                      export GIT_SSL_CAPATH="${WORKSPACE_SSL_CA_DIRECTORY_PATH}"
+                      if [ "${PARAM_CRT_FILENAME}" != "" ] ; then
+                          export GIT_SSL_CAINFO="${WORKSPACE_SSL_CA_DIRECTORY_PATH}/${PARAM_CRT_FILENAME}"
+                      fi
+                    fi
+                    CHECKOUT_DIR="${WORKSPACE_OUTPUT_PATH}/${PARAM_SUBDIRECTORY}"
+                    
+                    cleandir() {
+                      # Delete any existing contents of the repo directory if it exists.
+                      #
+                      # We don't just "rm -rf ${CHECKOUT_DIR}" because ${CHECKOUT_DIR} might be "/"
+                      # or the root of a mounted volume.
+                      if [ -d "${CHECKOUT_DIR}" ] ; then
+                        # Delete non-hidden files and directories
+                        rm -rf "${CHECKOUT_DIR:?}"/*
+                        # Delete files and directories starting with . but excluding ..
+                        rm -rf "${CHECKOUT_DIR}"/.[!.]*
+                        # Delete files and directories starting with .. plus any other character
+                        rm -rf "${CHECKOUT_DIR}"/..?*
+                      fi
+                    }
+                    
+                    if [ "${PARAM_DELETE_EXISTING}" = "true" ] ; then
+                      cleandir || true
+                    fi
+                    
+                    test -z "${PARAM_HTTP_PROXY}" || export HTTP_PROXY="${PARAM_HTTP_PROXY}"
+                    test -z "${PARAM_HTTPS_PROXY}" || export HTTPS_PROXY="${PARAM_HTTPS_PROXY}"
+                    test -z "${PARAM_NO_PROXY}" || export NO_PROXY="${PARAM_NO_PROXY}"
+                    
+                    git config --global --add safe.directory "${WORKSPACE_OUTPUT_PATH}"
+                    /ko-app/git-init \
+                      -url="${PARAM_URL}" \
+                      -revision="${PARAM_REVISION}" \
+                      -refspec="${PARAM_REFSPEC}" \
+                      -path="${CHECKOUT_DIR}" \
+                      -sslVerify="${PARAM_SSL_VERIFY}" \
+                      -submodules="${PARAM_SUBMODULES}" \
+                      -depth="${PARAM_DEPTH}" \
+                      -sparseCheckoutDirectories="${PARAM_SPARSE_CHECKOUT_DIRECTORIES}"
+                    cd "${CHECKOUT_DIR}"
+                    RESULT_SHA="$(git rev-parse HEAD)"
+                    EXIT_CODE="$?"
+                    if [ "${EXIT_CODE}" != 0 ] ; then
+                      exit "${EXIT_CODE}"
+                    fi
+                    RESULT_COMMITTER_DATE="$(git log -1 --pretty=%ct)"
+                    printf "%s" "${RESULT_COMMITTER_DATE}" > "$(results.committer-date.path)"
+                    printf "%s" "${RESULT_SHA}" > "$(results.commit.path)"
+                    printf "%s" "${PARAM_URL}" > "$(results.url.path)"
+                    
+                  securityContext:
+                    runAsGroup: 0
+                    runAsUser: 0
+              workspaces:
+                - description: The git repo will be cloned onto the volume backing this Workspace.
+                  name: output
+                - description: |
+                    A .ssh directory with private key, known_hosts, config, etc. Copied to
+                    the user's home before git commands are executed. Used to authenticate
+                    with the git remote when performing the clone. Binding a Secret to this
+                    Workspace is strongly recommended over other volume types.
+                    
+                  name: ssh-directory
+                  optional: true
+                - description: |
+                    A Workspace containing a .gitconfig and .git-credentials file. These
+                    will be copied to the user's home before any git commands are run. Any
+                    other files in this Workspace are ignored. It is strongly recommended
+                    to use ssh-directory over basic-auth whenever possible and to bind a
+                    Secret to this Workspace over other volume types.
+                    
+                  name: basic-auth
+                  optional: true
+                - description: |
+                    A workspace containing CA certificates, this will be used by Git to
+                    verify the peer with when fetching or pushing over HTTPS.
+                    
+                  name: ssl-ca-directory
+                  optional: true
+            workspaces:
+              - name: output
+                workspace: source-ws
+              - name: ssh-directory
+                workspace: sshkey-ws        
+          - name: bio-qc
+            params:
+              - name: R1_Fastq_File
+                value: $(params.R1_Fastq_File)
+              - name: R2_Fastq_File
+                value: $(params.R2_Fastq_File)
+              - name: Sample_Name
+                value: $(params.Sample_Name)
+              - name: Output_Directory
+                value: $(params.Output_Directory)
+            runAfter:
+              - fetch-from-git                          
+            workspaces:
+              - name: source
+                workspace: source-ws            
+            taskSpec:
+              description: qc sample task.
+              params:
+                - default: ./R1_Fastq_File
+                  description: R1 fastq file.
+                  name: R1_Fastq_File
+                  type: string
+                - default: ./R2_Fastq_File
+                  description: R2 fastq file.
+                  name: R2_Fastq_File
+                  type: string
+                - description: Sample name.
+                  name: Sample_Name
+                  type: string 
+                - default: /home
+                  description: Output directory.
+                  name: Output_Directory
+                  type: string                                                                       
+              results:
+                - name: R1_Clean_DIGEST
+                  type: string
+                - name: R1_Unpaired_DIGEST
+                  type: string
+                - name: R2_Clean_DIGEST
+                  type: string
+                - name: R2_Unpaired_DIGEST
+                  type: string                                       
+              workspaces:
+                - description: data source
+                  name: source                                                    
+              steps:            
+                - computeResources: {}
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.2
+                  name: sample-qc
+                  args:
+                    - '-f$(workspaces.source.path)/$(params.R1_Fastq_File)'
+                    - '-r$(workspaces.source.path)/$(params.R2_Fastq_File)'
+                    - '-p$(params.Sample_Name)' 
+                    - '-o$(params.Output_Directory)'                                      
+                  script: |
+                    #!/usr/bin/env bash
+                    set -e
+
+                    while getopts f:r:p:o: opt
+                    do
+                        case $opt in
+                            f)
+                            r1_fq=$OPTARG
+                            ;;
+                            r)
+                            r2_fq=$OPTARG
+                            ;;
+                            p)
+                            sampleID=$OPTARG
+                            ;;
+                            o)
+                            outDir=$OPTARG
+                            ;;
+                        esac
+                    done
+
+                    export TRIMMOMATIC=/usr/local/bin/Trimmomatic-0.36/trimmomatic-0.36.jar
+                    export ADAPTER=$(workspaces.source.path)/TruSeq3-PE-2.fa
+
+                    echo "*** QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
+                    echo "Begin at:" `date`
+                    java -jar $TRIMMOMATIC PE -threads 6 -phred33 $r1_fq $r2_fq $outDir/$sampleID.R1_clean.fq.gz $outDir/$sampleID.R1_unpaired.fq.gz $outDir/$sampleID.R2_clean.fq.gz $outDir/$sampleID.R2_unpaired.fq.gz ILLUMINACLIP:$ADAPTER:2:30:10:8:true LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:72
+                    echo "End at:" `date`
+                    echo "*** Finished QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
+
+                    r1_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_clean.fq.gz" | awk '{print $1}')
+                    r1_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_unpaired.fq.gz" | awk '{print $1}')
+                    r2_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_clean.fq.gz" | awk '{print $1}')
+                    r2_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_unpaired.fq.gz" | awk '{print $1}')
+
+                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
+                    bucket={{ .Release.Workspace | default "bio-results" }}
+                    schema=http
+
+                    if [ "$usehttps" = true ]; then
+                        schema=https
+                    fi
+
+                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
+                    mc mb oss/$bucket  --ignore-existing
+                    mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_clean.fq.gz
+                    mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_unpaired.fq.gz
+                    mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_clean.fq.gz
+                    mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_unpaired.fq.gz
+
+                    echo "> bio qc results uploaded..."
+                    echo -n "$r1_clean_sha256_hash" | tee "$(results.R1_Clean_DIGEST.path)"
+                    echo -n "$r1_unpaired_sha256_hash" | tee "$(results.R1_Unpaired_DIGEST.path)"
+                    echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
+                    echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
+                    echo -e ">>>> end <<<<"                              
+        finally:
+          - name: artifacts-producer
+            params:
+              - name: R1_Clean_DIGEST
+                value: "$(tasks.bio-qc.results.R1_Clean_DIGEST)"
+              - name: R1_Unpaired_DIGEST
+                value: "$(tasks.bio-qc.results.R1_Unpaired_DIGEST)"                
+              - name: R2_Clean_DIGEST
+                value: "$(tasks.bio-qc.results.R2_Clean_DIGEST)" 
+              - name: R2_Unpaired_DIGEST
+                value: "$(tasks.bio-qc.results.R2_Unpaired_DIGEST)"
+              - name: Sample_Name
+                value: "$(params.Sample_Name)"                                                                                                                                       
+            taskSpec:
+              description: |
+                      A simple task that populates artifacts to TaskRun result
+              params:
+                - name: R1_Clean_DIGEST
+                - name: R1_Unpaired_DIGEST
+                - name: R2_Clean_DIGEST 
+                - name: R2_Unpaired_DIGEST
+                - name: Sample_Name                                      
+              results:
+                - description: artifact info.
+                  name: ArtifactInfo
+                  type: string       
+              steps:
+                - name: emitting-artifacts
+                  image: registry.cn-shanghai.aliyuncs.com/kube-shipper/bash:5.1.4
+                  script: |
+                    cat > $(results.ArtifactInfo.path) << EOF
+                    {
+                      "description":"生物分析结果集",
+                      "outputs":[
+                        {
+                          "name":"r1-clean",
+                          "producer":"qc-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(params.R1_Clean_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_clean.fq.gz",
+                          "description":""
+                        },
+                        {
+                          "name":"r1-unpaired",
+                          "producer":"qc-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(params.R1_Unpaired_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_unpaired.fq.gz",
+                          "description":""
+                        },
+                        {
+                          "name":"r2-clean",
+                          "producer":"qc-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(params.R2_Clean_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_clean.fq.gz",
+                          "description":""
+                        },
+                        {
+                          "name":"r2-unpaired",
+                          "producer":"qc-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(params.R2_Unpaired_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_unpaired.fq.gz",
+                          "description":""
+                        }
+                      ]
+                    }
+                    EOF
+        results:
+          - name: shipper-artifacts
+            value: $(finally.artifacts-producer.results.ArtifactInfo)
+        workspaces:
+          - description: Location where source is stored.
+            name: source-ws
+          - name: sshkey-ws
+            description: An optional workspace that allows providing a .ssh/id_rsa.
+            optional: true        
+      workspaces:
+        - name: source-ws
+          volumeClaimTemplate:
+            metadata:
+              name: builder-bio-qc-sample
+              labels:
+                pvc.ws.shipper.lingbohome.com/auto-delete: 'yes'
+                pvc.ws.shipper.lingbohome.com/delete-strategy: 'always'
+                shipper.lingbohome.com/pipeline: {{ .Release.PipelineName | quote }}               
+            spec:
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 500Mi
+          {{- if eq .Values.sourceVisibility "private" }}                  
+        - name: sshkey-ws
+          secret:
+            secretName: "{{- if eq .Values.gitAuthMode "ssh-auth" }}{{ .Values.gitAuthCredentials }}{{- end }}{{- if eq .Values.gitAuthMode "built-in-ssh" }}{{ .Release.SSH.Credentials }}{{- end }}"
+          {{- end }}
+  values.yaml: |
+    sourceVisibility: "public"
+    sampleName: "FA240915059"
+  values.schema.json: |
+    {
+      "properties": {
+        "sampleName": {
+          "title": "样本名称",
+          "description": "样本名称，若不设置，默认则以分析job实例名为样本名称",
+          "type": "string"
+        },
+        "r1FastqFile": {
+          "title": "r1FastqFile文件",
+          "description": "r1FastqFile文件相对数据集仓库的路径，如：data/r1.fastq.gz",
+          "type": "string"
+        },
+        "r2FastqFile": {
+          "title": "r2FastqFile文件",
+          "description": "r2FastqFile文件相对数据集仓库的路径，如：subpath/r2.fastq.gz",
+          "type": "string"
+        },
+        "outputDir": {
+          "title": "输出目录",
+          "description": "分析结果输出目录，如：/tmp",
+          "type": "string"
+        },                                     
+        "sourceUrl": {
+          "title": "数据集仓库地址",
+          "description": "一个生物分析的所需输入参数数据集仓库git url地址，支持公开仓库和私有仓库",
+          "type": "string",
+          "x-shipper-ui": {
+            "placeholder": "github、gitlab、gitee都可以，只要平台可以顺利访问"
+          }
+        },
+        "sourceRef": {
+          "title": "仓库分支",
+          "description": "指定数据集仓库的分支、Tag、Sha等",
+          "type": "string",
+          "x-shipper-ui": {
+            "placeholder": "没有指定时，默认为”“，即表示按照仓库设定的默认分支构建"
+          }
+        },
+        "sourceVisibility": {
+          "description": "提供的git url仓库地址是一个公开仓库还是私有仓库，公开仓库不需要认证！",
+          "title": "数据集仓库可见性",
+          "type": "string",
+          "enum": [{
+              "label": "公开仓库",
+              "value": "public"
+            },
+            {
+              "label": "私有仓库",
+              "value": "private"
+            }
+          ]
+        },
+        "gitAuthMode": {
+          "description": "指定私有数据集仓库的认证模式,[内置安全认证]模式下请将企业空间内的key（公钥）导入您的git系统！",
+          "title": "代码仓库认证模式",
+          "type": "string",
+          "enum": [{
+              "label": "ssh-auth",
+              "value": "ssh-auth"
+            },
+            {
+              "label": "内置安全认证（推荐）",
+              "value": "built-in-ssh"
+            }
+          ],
+          "x-shipper-ui": {
+            "visibleIf":{
+              "sourceVisibility":"private"
+            }
+          }
+        },
+        "gitAuthCredentials": {
+          "title": "数据集仓库认证凭据",
+          "description": "认证凭据是一个带有id_rsa的ssh-key的secret，id_rsa键值对完全由您自定义",
+          "type": "string",
+          "x-shipper-ui": {
+            "placeholder": "在这里输入认证凭据 secret 名称",
+            "visibleIf":{
+              "sourceVisibility":"private",
+              "gitAuthMode":"ssh-auth"
+            }
+          }
+        }        
+      },
+      "order": [
+        "sourceUrl",
+        "sourceVisibility",
+        "gitAuthMode",
+        "gitAuthCredentials",
+        "sourceRef",
+        "sampleName",
+        "r1FastqFile",
+        "r2FastqFile",
+        "outputDir"
+      ],
+      "required": [
+        "sampleName",
+        "sourceUrl",
+        "sourceVisibility",
+        "gitAuthMode",
+        "gitAuthCredentials"
+      ],
+      "title": "Values",
+      "type": "object"
+    }                                
