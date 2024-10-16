@@ -40,7 +40,9 @@ data:
         - name: Sample_Name
           value: {{ .Values.sampleName | default .Release.PipelineName | quote }}
         - name: Output_Directory
-          value: {{ .Values.outputDir | default "/tmp" | quote }}      
+          value: {{ .Values.outputDir | default "/tmp" | quote }}
+        - name: AlnTarget
+          value: {{ .Values.alnTarget | quote }}                  
       pipelineSpec:
         description: bio qc sample pipeline..
         params:
@@ -65,7 +67,9 @@ data:
           - default: /home
             description: Output directory.
             name: Output_Directory
-            type: string          
+            type: string
+          - name: AlnTarget
+            type: string                          
         tasks:
           - name: fetch-from-git
             params:
@@ -199,7 +203,142 @@ data:
                     echo -n "$r1_unpaired_sha256_hash" | tee "$(results.R1_Unpaired_DIGEST.path)"
                     echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
                     echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
-                    echo -e ">>>> end <<<<"                              
+                    echo -e ">>>> output files <<<<" 
+                    mkdir -p $(workspaces.source.path)/01_QC
+                    cp -r $outDir/* $(workspaces.source.path)/01_QC
+                    echo -e ">>>> end <<<<" 
+          - name: bio-aln
+            params:
+              - name: Sample_Name
+                value: $(params.Sample_Name)
+              - name: AlnTarget
+                value: $(params.AlnTarget)
+            runAfter:
+              - bio-qc                          
+            workspaces:
+              - name: source
+                workspace: source-ws            
+            taskSpec:
+              description: aln sample task.
+              params:
+                - description: Sample name.
+                  name: Sample_Name
+                  type: string 
+                - name: AlnTarget
+                  type: string                                                                       
+              results:
+                - name: R1_Clean_DIGEST
+                  type: string
+                - name: R1_Unpaired_DIGEST
+                  type: string
+                - name: R2_Clean_DIGEST
+                  type: string
+                - name: R2_Unpaired_DIGEST
+                  type: string                                       
+              workspaces:
+                - description: data source
+                  name: source                                                    
+              steps:            
+                - computeResources: {}
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-aln:v0.2
+                  name: sample-aln
+                  args:
+                    - '-f$(workspaces.source.path)/01_QC/$(params.Sample_Name).R1_clean.fq.gz'
+                    - '-r$(workspaces.source.path)/01_QC/$(params.Sample_Name).R2_clean.fq.gz'
+                    - '-p$(params.Sample_Name)'
+                    - '-t$(workspaces.source.path)/$(params.AlnTarget)'  
+                    - '-o$(workspaces.source.path)/02_aln'                                      
+                  script: |
+                    #!/usr/bin/env bash
+                    set -e
+
+                    while getopts f:r:p:t:o: opt
+                    do
+                        case $opt in
+                            f)
+                            r1_fq=$OPTARG
+                            ;;
+                            r)
+                            r2_fq=$OPTARG
+                            ;;
+                            p)
+                            sampleID=$OPTARG
+                            ;;
+                            t)
+                            target=$OPTARG
+                            ;;
+                            o)
+                            outDir=$OPTARG
+                            ;;
+                        esac
+                    done
+
+                    mkdir -p $outDir
+                    ##准备数据
+                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
+                    bucket={{ .Release.Workspace | default "bio-results" }}
+                    schema=http
+
+                    if [ "$usehttps" = true ]; then
+                        schema=https
+                    fi
+
+                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
+                    mc cp oss/bio-poc/human_g1k_v37.fasta.gz $outDir/human_g1k_v37.fasta.gz
+                    mc cp oss/bio-poc/human_g1k_v37.fasta.fai $outDir/human_g1k_v37.fasta.fai
+                    ##设置环境变量
+                    export SOFT=/data1/workdir/software
+                    export SAMTOOLS_1_8=$SOFT/samtools-1.8/bin/samtools
+                    export REF="$outDir/human_g1k_v37.fasta.fai $outDir/human_g1k_v37.fasta.gz"
+                    ######例子
+                    ####   sh /home/wangce/workdir/bin/ctDNA_v5/aln_ctDNA.sh  -f /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R1_clean.fq.gz  -r /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R2_clean.fq.gz  -t /home/wangce/workdir/database/humandb/panel/338genes_20210624.bed  -p 202411_CL02080  -o /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/02_aln  >>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.o  2>>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.e
+                    echo "Begin at:" `date`
+                    echo "*** Alignment by BWA-0.7.12-r1039 ***"
+                    bwa index -p human_g1k_v37 $outDir/human_g1k_v37.fasta.gz
+                    bwa mem -R "@RG\tID:$sampleID\tSM:$sampleID\tPL:illumina\tDS:hg19\tCN:clgene" -t 8 -M human_g1k_v37 $r1_fq $r2_fq > $outDir/$sampleID.bam
+                    echo "*** Finished alignment by BWA-0.7.12-r1039 ***"
+                    echo "*** Bam sorting by samtools-v1.8 ***"
+                    $SAMTOOLS_1_8 sort -m 4G -@ 8 -T $outDir/$sampleID.sort -o $outDir/$sampleID.sort.bam $outDir/$sampleID.bam
+                    if [ -f "$outDir/$sampleID.sort.bam" ];then
+                      $SAMTOOLS_0_1_19 index $outDir/$sampleID.sort.bam
+                      rm $outDir/$sampleID.bam
+                    fi
+                    echo "*** Finished sorting bam by samtools-v1.8 ***"
+                    echo "*** Target region filter by samtools-v0.1.19 ***"
+                    $SAMTOOLS_0_1_19 view -b -@ 8 -q 30 -L $target -o $outDir/$sampleID.target.bam $outDir/$sampleID.sort.bam
+                    $SAMTOOLS_0_1_19 index $outDir/$sampleID.target.bam
+                    echo "*** Finished target region filter by samtools-v0.1.19 ***"
+                    echo "End at:" `date`
+
+                    ls -l $outDir
+
+                    # r1_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_clean.fq.gz" | awk '{print $1}')
+                    # r1_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_unpaired.fq.gz" | awk '{print $1}')
+                    # r2_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_clean.fq.gz" | awk '{print $1}')
+                    # r2_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_unpaired.fq.gz" | awk '{print $1}')
+
+                    # usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
+                    # bucket={{ .Release.Workspace | default "bio-results" }}
+                    # schema=http
+
+                    # if [ "$usehttps" = true ]; then
+                    #     schema=https
+                    # fi
+
+                    # mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
+                    mc cp "$indexkey" "$onlineindex"
+                    # mc mb oss/$bucket  --ignore-existing
+                    # mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_clean.fq.gz
+                    # mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_unpaired.fq.gz
+                    # mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_clean.fq.gz
+                    # mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_unpaired.fq.gz
+
+                    # echo "> bio qc results uploaded..."
+                    # echo -n "$r1_clean_sha256_hash" | tee "$(results.R1_Clean_DIGEST.path)"
+                    # echo -n "$r1_unpaired_sha256_hash" | tee "$(results.R1_Unpaired_DIGEST.path)"
+                    # echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
+                    # echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
+                    # echo -e ">>>> end <<<<"                                                   
         finally:
           - name: artifacts-producer
             params:
@@ -331,7 +470,12 @@ data:
           "title": "输出目录",
           "description": "分析结果输出目录，如：/tmp",
           "type": "string"
-        },                                     
+        },
+        "alnTarget": {
+          "title": "aln_target",
+          "description": "aln_target文件相对数据集仓库的路径，如：data/aln_target.bed",
+          "type": "string"
+        },                                             
         "sourceUrl": {
           "title": "数据集仓库地址",
           "description": "一个生物分析的所需输入参数数据集仓库git url地址，支持公开仓库和私有仓库",
@@ -403,10 +547,12 @@ data:
         "sampleName",
         "r1FastqFile",
         "r2FastqFile",
-        "outputDir"
+        "outputDir",
+        "alnTarget"
       ],
       "required": [
         "sampleName",
+        "alnTarget",
         "sourceUrl",
         "sourceVisibility",
         "gitAuthMode",

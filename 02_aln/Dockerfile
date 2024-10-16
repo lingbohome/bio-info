@@ -31,13 +31,14 @@ RUN mkdir -p $SOFT/gencore && wget http://opengene.org/gencore/gencore -O $GENCO
 RUN mkdir -p $SOFT/picard_v2.20.0 && wget https://github.com/broadinstitute/picard/releases/download/2.20.0/picard.jar -O $PICARD  &&  chmod +x $PICARD 
 ##&& java -jar $PICARD -h  
 
-ENV SAMTOOLS_1_9=$SOFT/samtools-1.9/samtools
+ENV SAMTOOLS_0_1_19=$SOFT/samtools-0.1.19/samtools
 RUN wget https://github.com/samtools/samtools/archive/refs/tags/0.1.19.tar.gz -O samtools-0.1.19.tar.gz && \
     tar -xzvf samtools-0.1.19.tar.gz && \
     rm samtools-0.1.19.tar.gz && \
     cd samtools-0.1.19 && \
-    make && mkdir -p $SOFT/samtools-1.9 && mv samtools $SAMTOOLS_1_9 && \
+    make && mkdir -p $SOFT/samtools-0.1.19 && mv samtools $SAMTOOLS_0_1_19 && \
     cd ../ && rm -rf samtools-0.1.19/  
+RUN curl https://dl.min.io/client/mc/release/linux-amd64/mc -o /usr/bin/mc  &&  chmod +x /usr/bin/mc    
 
 ENV PATH=$SOFT/samtools-1.8/bin:$PATH  
 
