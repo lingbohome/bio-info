@@ -79,6 +79,8 @@ data:
                 value: $(params.SOURCE_REFERENCE)
               - name: sslVerify
                 value: 'false'
+              - name: subdirectory
+                value: '{{ .Release.BuilderName }}/00_inputs/'
             taskRef:
               resolver: bundles
               params:
@@ -140,13 +142,20 @@ data:
                   name: source                                                    
               steps:            
                 - computeResources: {}
+                  env:
+                    - name: PARAM_INPUT
+                      value: "{{ .Release.BuilderName }}/00_inputs"
+                    - name: PARAM_STEP_NAME
+                      value: "01_QC"                       
+                    - name: PARAM_SUBWORKDIR
+                      value: "{{ .Release.BuilderName }}/$(PARAM_STEP_NAME)/$(params.Sample_Name)"                                    
                   image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.2
                   name: sample-qc
                   args:
-                    - '-f$(workspaces.source.path)/$(params.R1_Fastq_File)'
-                    - '-r$(workspaces.source.path)/$(params.R2_Fastq_File)'
+                    - '-f$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R1_Fastq_File)'
+                    - '-r$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R2_Fastq_File)'
                     - '-p$(params.Sample_Name)' 
-                    - '-o$(params.Output_Directory)'                                      
+                    - '-o$(workspaces.source.path)/$(PARAM_SUBWORKDIR)'                                      
                   script: |
                     #!/usr/bin/env bash
                     set -e
@@ -164,13 +173,18 @@ data:
                             sampleID=$OPTARG
                             ;;
                             o)
+                            echo "output args >>>> ${OPTARG}"
                             outDir=$OPTARG
                             ;;
                         esac
                     done
 
+                    ## 准备qc工作目录及输出目录
+                    echo "output >>>> ${outDir}"
+                    mkdir -p ${outDir}
+
                     export TRIMMOMATIC=/usr/local/bin/Trimmomatic-0.36/trimmomatic-0.36.jar
-                    export ADAPTER=$(workspaces.source.path)/TruSeq3-PE-2.fa
+                    export ADAPTER=$(workspaces.source.path)/$PARAM_INPUT/TruSeq3-PE-2.fa
 
                     echo "*** QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
                     echo "Begin at:" `date`
@@ -193,10 +207,10 @@ data:
 
                     mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
                     mc mb oss/$bucket  --ignore-existing
-                    mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_clean.fq.gz
-                    mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_unpaired.fq.gz
-                    mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_clean.fq.gz
-                    mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_unpaired.fq.gz
+                    mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R1_clean.fq.gz
+                    mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R1_unpaired.fq.gz
+                    mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R2_clean.fq.gz
+                    mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R2_unpaired.fq.gz
 
                     echo "> bio qc results uploaded..."
                     echo -n "$r1_clean_sha256_hash" | tee "$(results.R1_Clean_DIGEST.path)"
@@ -204,8 +218,6 @@ data:
                     echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
                     echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
                     echo -e ">>>> output files <<<<" 
-                    mkdir -p $(workspaces.source.path)/01_QC
-                    cp -r $outDir/* $(workspaces.source.path)/01_QC
                     echo -e ">>>> end <<<<" 
           - name: bio-aln
             params:
@@ -227,27 +239,36 @@ data:
                 - name: AlnTarget
                   type: string                                                                       
               results:
-                - name: R1_Clean_DIGEST
+                - name: Sort_Bam_DIGEST
                   type: string
-                - name: R1_Unpaired_DIGEST
+                - name: Sort_Bam_Bai_DIGEST
                   type: string
-                - name: R2_Clean_DIGEST
+                - name: Target_Bam_DIGEST
                   type: string
-                - name: R2_Unpaired_DIGEST
+                - name: Target_Bam_Bai_DIGEST
                   type: string                                       
               workspaces:
                 - description: data source
                   name: source                                                    
               steps:            
                 - computeResources: {}
+                  env:
+                    - name: PARAM_INPUT
+                      value: "{{ .Release.BuilderName }}/00_inputs"
+                    - name: PARAM_STEP_NAME
+                      value: "02_aln"                      
+                    - name: PARAM_01QCDIR
+                      value: "{{ .Release.BuilderName }}/01_QC/$(params.Sample_Name)"
+                    - name: PARAM_SUBWORKDIR
+                      value: "{{ .Release.BuilderName }}/$(PARAM_STEP_NAME)/$(params.Sample_Name)"                                        
                   image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-aln:v0.2
                   name: sample-aln
                   args:
-                    - '-f$(workspaces.source.path)/01_QC/$(params.Sample_Name).R1_clean.fq.gz'
-                    - '-r$(workspaces.source.path)/01_QC/$(params.Sample_Name).R2_clean.fq.gz'
+                    - '-f$(workspaces.source.path)/$(PARAM_01QCDIR)/$(params.Sample_Name).R1_clean.fq.gz'
+                    - '-r$(workspaces.source.path)/$(PARAM_01QCDIR)/$(params.Sample_Name).R2_clean.fq.gz'
                     - '-p$(params.Sample_Name)'
-                    - '-t$(workspaces.source.path)/$(params.AlnTarget)'  
-                    - '-o$(workspaces.source.path)/02_aln'                                      
+                    - '-t$(workspaces.source.path)/$(PARAM_INPUT)/$(params.AlnTarget)'  
+                    - '-o$(workspaces.source.path)/$(PARAM_SUBWORKDIR)'                                      
                   script: |
                     #!/usr/bin/env bash
                     set -e
@@ -273,29 +294,24 @@ data:
                         esac
                     done
 
+                    ## 准备aln工作目录及输出目录
+                    echo "output >>>> ${outDir}"
                     mkdir -p $outDir
-                    ##准备数据
-                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
-                    bucket={{ .Release.Workspace | default "bio-results" }}
-                    schema=http
 
-                    if [ "$usehttps" = true ]; then
-                        schema=https
-                    fi
-
-                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
-                    mc cp oss/bio-poc/human_g1k_v37.fasta.gz $outDir/human_g1k_v37.fasta.gz
-                    mc cp oss/bio-poc/human_g1k_v37.fasta.fai $outDir/human_g1k_v37.fasta.fai
                     ##设置环境变量
                     export SOFT=/data1/workdir/software
                     export SAMTOOLS_1_8=$SOFT/samtools-1.8/bin/samtools
-                    export REF="$outDir/human_g1k_v37.fasta.fai $outDir/human_g1k_v37.fasta.gz"
+                    export REF="$(workspaces.source.path)/index_files/human_g1k_v37"
                     ######例子
                     ####   sh /home/wangce/workdir/bin/ctDNA_v5/aln_ctDNA.sh  -f /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R1_clean.fq.gz  -r /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R2_clean.fq.gz  -t /home/wangce/workdir/database/humandb/panel/338genes_20210624.bed  -p 202411_CL02080  -o /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/02_aln  >>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.o  2>>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.e
                     echo "Begin at:" `date`
                     echo "*** Alignment by BWA-0.7.12-r1039 ***"
-                    bwa index -p human_g1k_v37 $outDir/human_g1k_v37.fasta.gz
-                    bwa mem -R "@RG\tID:$sampleID\tSM:$sampleID\tPL:illumina\tDS:hg19\tCN:clgene" -t 8 -M human_g1k_v37 $r1_fq $r2_fq > $outDir/$sampleID.bam
+                    cd $(workspaces.source.path)/index_files
+                    # bwa index -p human_g1k_v37 -b 1000000000 -a bwtsw $(workspaces.source.path)/index_files/human_g1k_v37.fasta.gz
+                    # bwa index -p human_g1k_v37 $outDir/human_g1k_v37.fasta.gz
+                    cd $(workspaces.source.path)
+                    bwa mem -R "@RG\tID:$sampleID\tSM:$sampleID\tPL:illumina\tDS:hg19\tCN:clgene" -t 8 -M $REF $r1_fq $r2_fq > $outDir/$sampleID.bam
+                    ## bwa mem -R "@RG\tID:$sampleID\tSM:$sampleID\tPL:illumina\tDS:hg19\tCN:clgene" -t 8 -M ./index_files/human_g1k_v37 ./01_QC/FA240915059.R1_clean.fq.gz ./01_QC/FA240915059.R2_clean.fq.gz $r2_fq > ./02_aln/$sampleID.bam
                     echo "*** Finished alignment by BWA-0.7.12-r1039 ***"
                     echo "*** Bam sorting by samtools-v1.8 ***"
                     $SAMTOOLS_1_8 sort -m 4G -@ 8 -T $outDir/$sampleID.sort -o $outDir/$sampleID.sort.bam $outDir/$sampleID.bam
@@ -312,36 +328,39 @@ data:
 
                     ls -l $outDir
 
-                    # r1_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_clean.fq.gz" | awk '{print $1}')
-                    # r1_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_unpaired.fq.gz" | awk '{print $1}')
-                    # r2_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_clean.fq.gz" | awk '{print $1}')
-                    # r2_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_unpaired.fq.gz" | awk '{print $1}')
+                    sort_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam" | awk '{print $1}')
+                    sort_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam.bai" | awk '{print $1}')
+                    target_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam" | awk '{print $1}')
+                    target_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam.bai" | awk '{print $1}')
 
-                    # usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
-                    # bucket={{ .Release.Workspace | default "bio-results" }}
-                    # schema=http
+                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
+                    bucket={{ .Release.Workspace | default "bio-poc-data" }}
+                    schema=http
 
-                    # if [ "$usehttps" = true ]; then
-                    #     schema=https
-                    # fi
+                    if [ "$usehttps" = true ]; then
+                        schema=https
+                    fi
 
-                    # mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
-                    mc cp "$indexkey" "$onlineindex"
-                    # mc mb oss/$bucket  --ignore-existing
-                    # mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_clean.fq.gz
-                    # mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R1_unpaired.fq.gz
-                    # mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_clean.fq.gz
-                    # mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$sampleID.R2_unpaired.fq.gz
+                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
+                    mc mb oss/$bucket  --ignore-existing
+                    mc put $outDir/$sampleID.sort.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam
+                    mc put $outDir/$sampleID.sort.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam.bai
+                    mc put $outDir/$sampleID.target.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam
+                    mc put $outDir/$sampleID.target.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam.bai
 
-                    # echo "> bio qc results uploaded..."
-                    # echo -n "$r1_clean_sha256_hash" | tee "$(results.R1_Clean_DIGEST.path)"
-                    # echo -n "$r1_unpaired_sha256_hash" | tee "$(results.R1_Unpaired_DIGEST.path)"
-                    # echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
-                    # echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
-                    # echo -e ">>>> end <<<<"                                                   
+                    echo "> bio aln results uploaded..."
+                    echo -n "$sort_bam_sha256_hash" | tee "$(results.Sort_Bam_DIGEST.path)"
+                    echo -n "$sort_bam_bai_sha256_hash" | tee "$(results.Sort_Bam_Bai_DIGEST.path)"
+                    echo -n "$target_bam_sha256_hash" | tee "$(results.Target_Bam_DIGEST.path)"
+                    echo -n "$target_bam_bai_sha256_hash" | tee "$(results.Target_Bam_Bai_DIGEST.path)"
+                    echo -e ">>>> end <<<<"                                                   
         finally:
           - name: artifacts-producer
             params:
+              - name: QC_STEP_NAME
+                value: "01_QC"
+              - name: ALN_STEP_NAME
+                value: "02_aln"             
               - name: R1_Clean_DIGEST
                 value: "$(tasks.bio-qc.results.R1_Clean_DIGEST)"
               - name: R1_Unpaired_DIGEST
@@ -356,6 +375,8 @@ data:
               description: |
                       A simple task that populates artifacts to TaskRun result
               params:
+                - name: QC_STEP_NAME
+                - name: ALN_STEP_NAME                              
                 - name: R1_Clean_DIGEST
                 - name: R1_Unpaired_DIGEST
                 - name: R2_Clean_DIGEST 
@@ -378,41 +399,81 @@ data:
                           "producer":"qc-analyzer",
                           "type":"oss",
                           "format":"file",
-                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
                           "digest":"$(params.R1_Clean_DIGEST)",
-                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_clean.fq.gz",
-                          "description":""
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz",
+                          "description":"$(params.QC_STEP_NAME)"
                         },
                         {
                           "name":"r1-unpaired",
                           "producer":"qc-analyzer",
                           "type":"oss",
                           "format":"file",
-                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
                           "digest":"$(params.R1_Unpaired_DIGEST)",
-                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R1_unpaired.fq.gz",
-                          "description":""
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz",
+                          "description":"$(params.QC_STEP_NAME)"
                         },
                         {
                           "name":"r2-clean",
                           "producer":"qc-analyzer",
                           "type":"oss",
                           "format":"file",
-                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
                           "digest":"$(params.R2_Clean_DIGEST)",
-                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_clean.fq.gz",
-                          "description":""
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz",
+                          "description":"$(params.QC_STEP_NAME)"
                         },
                         {
                           "name":"r2-unpaired",
                           "producer":"qc-analyzer",
                           "type":"oss",
                           "format":"file",
-                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
                           "digest":"$(params.R2_Unpaired_DIGEST)",
-                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.Sample_Name).R2_unpaired.fq.gz",
-                          "description":""
-                        }
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz",
+                          "description":"$(params.QC_STEP_NAME)"
+                        },
+                        {
+                          "name":"sort_bam",
+                          "producer":"aln-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(tasks.bio-aln.results.Sort_Bam_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam",
+                          "description":"$(params.ALN_STEP_NAME)"
+                        },
+                        {
+                          "name":"sort_bam_bai",
+                          "producer":"aln-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(tasks.bio-aln.results.Sort_Bam_Bai_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai",
+                          "description":"$(params.ALN_STEP_NAME)"
+                        },
+                        {
+                          "name":"target_bam",
+                          "producer":"aln-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(tasks.bio-aln.results.Target_Bam_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam",
+                          "description":"$(params.ALN_STEP_NAME)"
+                        },
+                        {
+                          "name":"target_bam_bai",
+                          "producer":"aln-analyzer",
+                          "type":"oss",
+                          "format":"file",
+                          "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+                          "digest":"$(tasks.bio-aln.results.Target_Bam_Bai_DIGEST)",
+                          "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai",
+                          "description":"$(params.ALN_STEP_NAME)"
+                        }                        
                       ]
                     }
                     EOF
@@ -427,19 +488,8 @@ data:
             optional: true        
       workspaces:
         - name: source-ws
-          volumeClaimTemplate:
-            metadata:
-              name: builder-bio-qc-sample
-              labels:
-                pvc.ws.shipper.lingbohome.com/auto-delete: 'yes'
-                pvc.ws.shipper.lingbohome.com/delete-strategy: 'always'
-                shipper.lingbohome.com/pipeline: {{ .Release.PipelineName | quote }}               
-            spec:
-              accessModes:
-                - ReadWriteOnce
-              resources:
-                requests:
-                  storage: 500Mi
+          persistentVolumeClaim:
+            claimName: bio-poc   
           {{- if eq .Values.sourceVisibility "private" }}                  
         - name: sshkey-ws
           secret:
