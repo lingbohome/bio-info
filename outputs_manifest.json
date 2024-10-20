@@ -1,0 +1,85 @@
+{
+    "description":"生物分析结果集",
+    "outputs":[
+      {
+        "name":"r1-clean",
+        "producer":"qc-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(params.R1_Clean_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz",
+        "description":"$(params.QC_STEP_NAME)"
+      },
+      {
+        "name":"r1-unpaired",
+        "producer":"qc-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(params.R1_Unpaired_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz",
+        "description":"$(params.QC_STEP_NAME)"
+      },
+      {
+        "name":"r2-clean",
+        "producer":"qc-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(params.R2_Clean_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz",
+        "description":"$(params.QC_STEP_NAME)"
+      },
+      {
+        "name":"r2-unpaired",
+        "producer":"qc-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(params.R2_Unpaired_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz",
+        "description":"$(params.QC_STEP_NAME)"
+      },
+      {
+        "name":"sort_bam",
+        "producer":"aln-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(tasks.bio-aln.results.Sort_Bam_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam",
+        "description":"$(params.ALN_STEP_NAME)"
+      },
+      {
+        "name":"sort_bam_bai",
+        "producer":"aln-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(tasks.bio-aln.results.Sort_Bam_Bai_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai",
+        "description":"$(params.ALN_STEP_NAME)"
+      },
+      {
+        "name":"target_bam",
+        "producer":"aln-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(tasks.bio-aln.results.Target_Bam_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam",
+        "description":"$(params.ALN_STEP_NAME)"
+      },
+      {
+        "name":"target_bam_bai",
+        "producer":"aln-analyzer",
+        "type":"oss",
+        "format":"file",
+        "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}",
+        "digest":"$(tasks.bio-aln.results.Target_Bam_Bai_DIGEST)",
+        "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai",
+        "description":"$(params.ALN_STEP_NAME)"
+      }                        
+    ]
+  }
