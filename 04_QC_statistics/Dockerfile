@@ -10,6 +10,8 @@ RUN wget https://github.com/arq5x/bedtools2/releases/download/v2.25.0/bedtools-2
     mkdir -p $SOFT/bedtools2 && cp -r bin/ $SOFT/bedtools2/ && \
     cd ../ && rm -rf bedtools2/
 
+RUN cpan Getopt::Long::Descriptive    
+
 ENV Bedtools $SOFT/bedtools2/bin/bedtools 
 
 ADD library_qc_ctDNA.pl QC_statistics.sh /usr/local/bin/
