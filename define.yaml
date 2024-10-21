@@ -489,7 +489,25 @@ data:
                     set -e
                     echo  -e "$(params.Sample_Name)\t$(workspaces.source.path)/$PARAM_02ALNDIR/$(params.Sample_Name).sort.bam\t$(workspaces.source.path)/$PARAM_03VARDIR/$(params.Sample_Name).rmdup.bam\t$(workspaces.source.path)/$PARAM_01QCDIR/$(params.Sample_Name).R1.fastqc_data.txt\t$(workspaces.source.path)/$PARAM_01QCDIR/$(params.Sample_Name).R2.fastqc_data.txt" >$(workspaces.source.path)/$PARAM_02ALNDIR/$(params.Sample_Name).bam_fastqc.list
 
-                    perl /usr/local/bin/library_qc_ctDNA.pl  -l $(workspaces.source.path)/$PARAM_02ALNDIR/$(params.Sample_Name).bam_fastqc.list  -b $(workspaces.source.path)/$PARAM_INPUT/$(params.AlnTarget)  -p $(params.Sample_Name)  -o $(workspaces.source.path)/$PARAM_01QCDIR -S $SOFT/samtools-1.8/bin -B $SOFT/bedtools2/bin                                                                                   
+                    perl /usr/local/bin/library_qc_ctDNA.pl  -l $(workspaces.source.path)/$PARAM_02ALNDIR/$(params.Sample_Name).bam_fastqc.list  -b $(workspaces.source.path)/$PARAM_INPUT/$(params.AlnTarget)  -p $(params.Sample_Name)  -o $(workspaces.source.path)/$PARAM_01QCDIR -S $SOFT/samtools-1.8/bin -B $SOFT/bedtools2/bin
+                - computeResources: {}
+                  env:
+                    - name: PARAM_INPUT
+                      value: "{{ .Release.BuilderName }}/00_inputs"
+                    - name: PARAM_01QCDIR
+                      value: "{{ .Release.BuilderName }}/01_QC/$(params.Sample_Name)"                      
+                    - name: PARAM_02ALNDIR
+                      value: "{{ .Release.BuilderName }}/02_aln/$(params.Sample_Name)"
+                    - name: PARAM_03VARDIR
+                      value: "{{ .Release.BuilderName }}/03_var/$(params.Sample_Name)"                                                                   
+                    - name: PARAM_SUBWORKDIR
+                      value: "{{ .Release.BuilderName }}/$(PARAM_STEP_NAME)/$(params.Sample_Name)"                                    
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-random-seq-pick:v0.2.2
+                  name: random-seq-pick                                     
+                  script: |
+                    #!/usr/bin/env bash
+                    set -e
+                    python3 /usr/local/bin/random_seq_pick.py  -i $(workspaces.source.path)/$PARAM_03VARDIR/$(params.Sample_Name).rmdup.target.bam  -s $(params.Sample_Name)  -n 1000000  -o $(workspaces.source.path)/$PARAM_02ALNDIR                                                                                                       
         finally:
           - name: artifacts-producer
             params:
