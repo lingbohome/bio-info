@@ -149,7 +149,7 @@ data:
                       value: "01_QC"                       
                     - name: PARAM_SUBWORKDIR
                       value: "{{ .Release.BuilderName }}/$(PARAM_STEP_NAME)/$(params.Sample_Name)"                                    
-                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.2
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.3.2
                   name: sample-qc
                   args:
                     - '-f$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R1_Fastq_File)'
@@ -185,9 +185,15 @@ data:
 
                     export TRIMMOMATIC=/usr/local/bin/Trimmomatic-0.36/trimmomatic-0.36.jar
                     export ADAPTER=$(workspaces.source.path)/$PARAM_INPUT/TruSeq3-PE-2.fa
-
+                    
                     echo "*** QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
                     echo "Begin at:" `date`
+                    $FASTQC -t 8 -o $outDir $r1_fq $r2_fq
+                    unzip -d $outDir $outDir/${sampleID}_R1*_fastqc.zip
+                    unzip -d $outDir $outDir/${sampleID}_R2*_fastqc.zip
+                    cp $outDir/${sampleID}_R1*_fastqc/fastqc_data.txt $outDir/$sampleID.R1.fastqc_data.txt
+                    cp $outDir/${sampleID}_R2*_fastqc/fastqc_data.txt $outDir/$sampleID.R2.fastqc_data.txt
+                    rm -rf $outDir/${sampleID}_R1*_fastqc $outDir/${sampleID}_R2*_fastqc
                     java -jar $TRIMMOMATIC PE -threads 6 -phred33 $r1_fq $r2_fq $outDir/$sampleID.R1_clean.fq.gz $outDir/$sampleID.R1_unpaired.fq.gz $outDir/$sampleID.R2_clean.fq.gz $outDir/$sampleID.R2_unpaired.fq.gz ILLUMINACLIP:$ADAPTER:2:30:10:8:true LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:72
                     echo "End at:" `date`
                     echo "*** Finished QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
