@@ -518,7 +518,7 @@ data:
                       value: "{{ .Release.BuilderName }}/02_aln/$(params.Sample_Name)"
                     - name: PARAM_03VARDIR
                       value: "{{ .Release.BuilderName }}/03_var/$(params.Sample_Name)"                                                                                                      
-                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.2.4
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.3.2
                   name: msi
                   args:
                     - '-n$(workspaces.source.path)/$(PARAM_03VARDIR)/$(params.Sample_Name).rmdup.bam'
@@ -570,7 +570,7 @@ data:
                     export REF="$(workspaces.source.path)/index_files/human_g1k_v37.fasta"
 
                     echo "Begin at:" `date`
-
+                    sleep 36000
                     # echo "*** Analysis by MSIsensor (selected sites) ***"
                     # $MSISENSOR msi -d $MS_V2 -n $normal_bam -t $tumor_pickseq_bam -e $target -o $outDir/$sampleID
                     # msisensor_score=`cat $outDir/$sampleID | tail -1 | cut -f 3`

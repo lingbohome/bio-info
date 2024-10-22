@@ -26,7 +26,7 @@ RUN chmod +x $MSIFINDER
 ENV MS_V2 $SOFT/msisensor/db/microsatellites_selected.list
 ADD microsatellites_selected.list $SOFT/msisensor/db/
 
-RUN apt-get update && apt-get install -y bc && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y bc libstdc++6 && rm -rf /var/lib/apt/lists/*
 # ENV CONDA_DIR $SOFT/anaconda3
 # RUN wget --quiet https://repo.anaconda.com/archive/Anaconda3-2023.09-0-Linux-x86_64.sh -O ~/anaconda.sh && \
 #     /bin/bash ~/anaconda.sh -b -p $CONDA_DIR && \
@@ -37,7 +37,21 @@ RUN apt-get update && apt-get install -y bc && rm -rf /var/lib/apt/lists/*
 
 # # 更新 conda 和所有包
 # RUN conda update -n base -c defaults conda && \
-#     conda update --all && conda clean -afy       
+#     conda update --all && conda clean -afy
+
+ENV FASTAHACK $SOFT/fastahack/fastahack
+# RUN wget https://anaconda.org/bioconda/fastahack/1.0.0/download/linux-64/fastahack-1.0.0-h4ac6f70_1.tar.bz2 && \
+#     tar -jxvf fastahack-1.0.0-h4ac6f70_1.tar.bz2 && \
+#     rm fastahack-1.0.0-h4ac6f70_1.tar.bz2 && \
+#     mkdir -p $SOFT/fastahack && mv bin/fastahack $SOFT/fastahack/fastahack && \
+#     rm -rf bin/ && rm -rf info/
+
+RUN wget https://github.com/ekg/fastahack/archive/refs/tags/v1.0.0.tar.gz -O fastahack-1.0.0.tar.gz && \
+tar -xzvf fastahack-1.0.0.tar.gz && \
+rm fastahack-1.0.0.tar.gz && \
+cd fastahack-1.0.0 && \
+make && mkdir -p $SOFT/fastahack && mv fastahack $FASTAHACK && \
+cd ../ && rm -rf fastahack-1.0.0/     
 
 # 设置工作目录
 WORKDIR /data
