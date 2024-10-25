@@ -127,16 +127,7 @@ data:
                 - default: /home
                   description: Output directory.
                   name: Output_Directory
-                  type: string                                                                       
-              results:
-                - name: R1_Clean_DIGEST
-                  type: string
-                - name: R1_Unpaired_DIGEST
-                  type: string
-                - name: R2_Clean_DIGEST
-                  type: string
-                - name: R2_Unpaired_DIGEST
-                  type: string                                       
+                  type: string                                                                                                             
               workspaces:
                 - description: data source
                   name: source                                                    
@@ -152,8 +143,8 @@ data:
                   image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.3.2
                   name: sample-qc
                   args:
-                    - '-f$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R1_Fastq_File)'
-                    - '-r$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R2_Fastq_File)'
+                    - '-f$(workspaces.source.path)/RawData/FA240204102_CL01211_R1_001.fastq.gz'
+                    - '-r$(workspaces.source.path)/RawData/FA240204102_CL01211_R2_001.fastq.gz'
                     - '-p$(params.Sample_Name)' 
                     - '-o$(workspaces.source.path)/$(PARAM_SUBWORKDIR)'                                      
                   script: |
@@ -197,34 +188,7 @@ data:
                     java -jar $TRIMMOMATIC PE -threads 6 -phred33 $r1_fq $r2_fq $outDir/$sampleID.R1_clean.fq.gz $outDir/$sampleID.R1_unpaired.fq.gz $outDir/$sampleID.R2_clean.fq.gz $outDir/$sampleID.R2_unpaired.fq.gz ILLUMINACLIP:$ADAPTER:2:30:10:8:true LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:72
                     echo "End at:" `date`
                     echo "*** Finished QC by FastQC-v0.11.5 and Trimmomatic-0.36 ***"
-
-                    r1_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_clean.fq.gz" | awk '{print $1}')
-                    r1_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R1_unpaired.fq.gz" | awk '{print $1}')
-                    r2_clean_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_clean.fq.gz" | awk '{print $1}')
-                    r2_unpaired_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.R2_unpaired.fq.gz" | awk '{print $1}')
-
-                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
-                    bucket={{ .Release.Workspace | default "bio-results" }}
-                    schema=http
-
-                    if [ "$usehttps" = true ]; then
-                        schema=https
-                    fi
-
-                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
-                    mc mb oss/$bucket  --ignore-existing
-                    mc put $outDir/$sampleID.R1_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R1_clean.fq.gz
-                    mc put $outDir/$sampleID.R1_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R1_unpaired.fq.gz
-                    mc put $outDir/$sampleID.R2_clean.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R2_clean.fq.gz
-                    mc put $outDir/$sampleID.R2_unpaired.fq.gz oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.R2_unpaired.fq.gz
-
-                    echo "> bio qc results uploaded..."
-                    echo -n "$r1_clean_sha256_hash" | tee "$(results.R1_Clean_DIGEST.path)"
-                    echo -n "$r1_unpaired_sha256_hash" | tee "$(results.R1_Unpaired_DIGEST.path)"
-                    echo -n "$r2_clean_sha256_hash" | tee "$(results.R2_Clean_DIGEST.path)"
-                    echo -n "$r2_unpaired_sha256_hash" | tee "$(results.R2_Unpaired_DIGEST.path)"
-                    echo -e ">>>> output files <<<<" 
-                    echo -e ">>>> end <<<<" 
+                    ls -l ${outDir}
           - name: bio-aln
             params:
               - name: Sample_Name
@@ -243,16 +207,7 @@ data:
                   name: Sample_Name
                   type: string 
                 - name: AlnTarget
-                  type: string                                                                       
-              results:
-                - name: Sort_Bam_DIGEST
-                  type: string
-                - name: Sort_Bam_Bai_DIGEST
-                  type: string
-                - name: Target_Bam_DIGEST
-                  type: string
-                - name: Target_Bam_Bai_DIGEST
-                  type: string                                       
+                  type: string                                                                                                             
               workspaces:
                 - description: data source
                   name: source                                                    
@@ -333,33 +288,6 @@ data:
                     echo "End at:" `date`
 
                     ls -l $outDir
-
-                    sort_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam" | awk '{print $1}')
-                    sort_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam.bai" | awk '{print $1}')
-                    target_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam" | awk '{print $1}')
-                    target_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam.bai" | awk '{print $1}')
-
-                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
-                    bucket={{ .Release.Workspace | default "bio-poc-data" }}
-                    schema=http
-
-                    if [ "$usehttps" = true ]; then
-                        schema=https
-                    fi
-
-                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
-                    mc mb oss/$bucket  --ignore-existing
-                    mc put $outDir/$sampleID.sort.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam
-                    mc put $outDir/$sampleID.sort.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam.bai
-                    mc put $outDir/$sampleID.target.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam
-                    mc put $outDir/$sampleID.target.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam.bai
-
-                    echo "> bio aln results uploaded..."
-                    echo -n "$sort_bam_sha256_hash" | tee "$(results.Sort_Bam_DIGEST.path)"
-                    echo -n "$sort_bam_bai_sha256_hash" | tee "$(results.Sort_Bam_Bai_DIGEST.path)"
-                    echo -n "$target_bam_sha256_hash" | tee "$(results.Target_Bam_DIGEST.path)"
-                    echo -n "$target_bam_bai_sha256_hash" | tee "$(results.Target_Bam_Bai_DIGEST.path)"
-                    echo -e ">>>> end <<<<"
                 - computeResources: {}
                   env:
                     - name: PARAM_INPUT
@@ -443,33 +371,6 @@ data:
                     echo "*** Finished post alignment process by gencore-v0.14.0, picard-2.20.0 and samtools-v1.8 ***"
 
                     ls -l $outDir
-
-                    # sort_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam" | awk '{print $1}')
-                    # sort_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.sort.bam.bai" | awk '{print $1}')
-                    # target_bam_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam" | awk '{print $1}')
-                    # target_bam_bai_sha256_hash=sha256:$(sha256sum "$outDir/$sampleID.target.bam.bai" | awk '{print $1}')
-
-                    # usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
-                    # bucket={{ .Release.Workspace | default "bio-poc-data" }}
-                    # schema=http
-
-                    # if [ "$usehttps" = true ]; then
-                    #     schema=https
-                    # fi
-
-                    # mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
-                    # mc mb oss/$bucket  --ignore-existing
-                    # mc put $outDir/$sampleID.sort.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam
-                    # mc put $outDir/$sampleID.sort.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.sort.bam.bai
-                    # mc put $outDir/$sampleID.target.bam oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam
-                    # mc put $outDir/$sampleID.target.bam.bai oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/${PARAM_STEP_NAME}/$sampleID/$sampleID.target.bam.bai
-
-                    # echo "> bio aln results uploaded..."
-                    # echo -n "$sort_bam_sha256_hash" | tee "$(results.Sort_Bam_DIGEST.path)"
-                    # echo -n "$sort_bam_bai_sha256_hash" | tee "$(results.Sort_Bam_Bai_DIGEST.path)"
-                    # echo -n "$target_bam_sha256_hash" | tee "$(results.Target_Bam_DIGEST.path)"
-                    # echo -n "$target_bam_bai_sha256_hash" | tee "$(results.Target_Bam_Bai_DIGEST.path)"
-                    # echo -e ">>>> end <<<<"
                 - computeResources: {}
                   env:
                     - name: PARAM_INPUT
@@ -570,19 +471,19 @@ data:
                     export REF="$(workspaces.source.path)/index_files/human_g1k_v37.fasta"
 
                     echo "Begin at:" `date`
-                    sleep 36000
-                    # echo "*** Analysis by MSIsensor (selected sites) ***"
-                    # $MSISENSOR msi -d $MS_V2 -n $normal_bam -t $tumor_pickseq_bam -e $target -o $outDir/$sampleID
-                    # msisensor_score=`cat $outDir/$sampleID | tail -1 | cut -f 3`
-                    # msisensor_judge=`echo "$msisensor_score > 70" | bc`
-                    # echo -e "MSIsensor_Status" > $outDir/$sampleID.msisensor
-                    # if [ $msisensor_judge -eq 1 ];then
-                    #     echo -e "MSI" >> $outDir/$sampleID.msisensor
-                    # else
-                    #     echo -e "MSS" >> $outDir/$sampleID.msisensor
-                    # fi
-                    # paste -d "\t" $outDir/$sampleID $outDir/$sampleID.msisensor > $outDir/$sampleID.msisensor.tmp
-                    # rm -rf $outDir/$sampleID.msisensor $outDir/$sampleID $outDir/${sampleID}_germline $outDir/${sampleID}_somatic $outDir/${sampleID}_dis
+                    ## sleep 36000
+                    echo "*** Analysis by MSIsensor (selected sites) ***"
+                    $MSISENSOR msi -d $MS_V2 -n $normal_bam -t $tumor_pickseq_bam -e $target -o $outDir/$sampleID
+                    msisensor_score=`cat $outDir/$sampleID | tail -1 | cut -f 3`
+                    msisensor_judge=`echo "$msisensor_score > 70" | bc`
+                    echo -e "MSIsensor_Status" > $outDir/$sampleID.msisensor
+                    if [ $msisensor_judge -eq 1 ];then
+                        echo -e "MSI" >> $outDir/$sampleID.msisensor
+                    else
+                        echo -e "MSS" >> $outDir/$sampleID.msisensor
+                    fi
+                    paste -d "\t" $outDir/$sampleID $outDir/$sampleID.msisensor > $outDir/$sampleID.msisensor.tmp
+                    rm -rf $outDir/$sampleID.msisensor $outDir/$sampleID $outDir/${sampleID}_germline $outDir/${sampleID}_somatic $outDir/${sampleID}_dis
 
                     echo "*** Analysis by MSIsensor-pro ***"
                     ###加载动态库
@@ -633,41 +534,112 @@ data:
         finally:
           - name: artifacts-producer
             params:
+              - name: INPUTS_DIR_NAME
+                value: "00_inputs"            
               - name: QC_STEP_NAME
                 value: "01_QC"
               - name: ALN_STEP_NAME
-                value: "02_aln"             
-              - name: R1_Clean_DIGEST
-                value: "$(tasks.bio-qc.results.R1_Clean_DIGEST)"
-              - name: R1_Unpaired_DIGEST
-                value: "$(tasks.bio-qc.results.R1_Unpaired_DIGEST)"                
-              - name: R2_Clean_DIGEST
-                value: "$(tasks.bio-qc.results.R2_Clean_DIGEST)" 
-              - name: R2_Unpaired_DIGEST
-                value: "$(tasks.bio-qc.results.R2_Unpaired_DIGEST)"
+                value: "02_aln"
+              - name: VAR_DIR_NAME
+                value: "03_var"
               - name: Sample_Name
-                value: "$(params.Sample_Name)"                                                                                                                                       
+                value: "$(params.Sample_Name)"
+            workspaces:
+              - name: source
+                workspace: source-ws
+            retries: 1                                                                                                                                                            
             taskSpec:
               description: |
                       A simple task that populates artifacts to TaskRun result
               params:
+                - name: INPUTS_DIR_NAME              
                 - name: QC_STEP_NAME
-                - name: ALN_STEP_NAME                              
-                - name: R1_Clean_DIGEST
-                - name: R1_Unpaired_DIGEST
-                - name: R2_Clean_DIGEST 
-                - name: R2_Unpaired_DIGEST
+                - name: ALN_STEP_NAME
+                - name: VAR_DIR_NAME                                              
                 - name: Sample_Name                                      
               results:
                 - description: artifact info.
                   name: ArtifactInfo
-                  type: string       
+                  type: string
+              workspaces:
+                - description: data source
+                  name: source                          
               steps:
                 - name: emitting-artifacts
-                  image: registry.cn-shanghai.aliyuncs.com/kube-shipper/bash:5.1.4
+                  image: registry.cn-shanghai.aliyuncs.com/kube-shipper/mc:RELEASE.2024-10-08T09-37-26Z
                   script: |
+                    #!/usr/bin/env bash
+                    set -e
+
+                    usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
+                    bucket={{ .Release.Workspace | default "bio-poc-data" }}
+                    schema=http
+
+                    if [ "$usehttps" = true ]; then
+                        schema=https
+                    fi
+
+                    mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
+                    mc mb oss/$bucket  --ignore-existing
+
+                    check_00_inputs_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/
+
+                    check_01_qc_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/
+
+                    check_02_aln_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/                     
+
+                    check_03_var_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/                    
+                 
                     cat > $(results.ArtifactInfo.path) << EOF
-                     {"description":"生物分析结果集","outputs":[{"name":"r1-clean","producer":"qc-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(params.R1_Clean_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_clean.fq.gz","description":"$(params.QC_STEP_NAME)"},{"name":"r1-unpaired","producer":"qc-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(params.R1_Unpaired_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R1_unpaired.fq.gz","description":"$(params.QC_STEP_NAME)"},{"name":"r2-clean","producer":"qc-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(params.R2_Clean_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_clean.fq.gz","description":"$(params.QC_STEP_NAME)"},{"name":"r2-unpaired","producer":"qc-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(params.R2_Unpaired_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).R2_unpaired.fq.gz","description":"$(params.QC_STEP_NAME)"},{"name":"sort_bam","producer":"aln-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(tasks.bio-aln.results.Sort_Bam_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam","description":"$(params.ALN_STEP_NAME)"},{"name":"sort_bam_bai","producer":"aln-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(tasks.bio-aln.results.Sort_Bam_Bai_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).sort.bam.bai","description":"$(params.ALN_STEP_NAME)"},{"name":"target_bam","producer":"aln-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(tasks.bio-aln.results.Target_Bam_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam","description":"$(params.ALN_STEP_NAME)"},{"name":"target_bam_bai","producer":"aln-analyzer","type":"oss","format":"file","url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}","digest":"$(tasks.bio-aln.results.Target_Bam_Bai_DIGEST)","displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/$(params.Sample_Name).target.bam.bai","description":"$(params.ALN_STEP_NAME)"}]}
+                     {
+                          "description":"生物分析结果集",
+                          "outputs":[
+                            {
+                              "name":"00-inputs",
+                              "producer":"data-source",
+                              "type":"oss",
+                              "format":"dir",
+                              "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}&isdir=true",
+                              "digest":"$check_00_inputs_hash",
+                              "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)",
+                              "description":"$(params.INPUTS_DIR_NAME)"
+                            },
+                            {
+                              "name":"01-qc",
+                              "producer":"qc",
+                              "type":"oss",
+                              "format":"dir",
+                              "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}&isdir=true",
+                              "digest":"$check_01_qc_hash",
+                              "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)",
+                              "description":"$(params.QC_STEP_NAME)"
+                            },
+                            {
+                              "name":"02-aln",
+                              "producer":"aln",
+                              "type":"oss",
+                              "format":"dir",
+                              "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}&isdir=true",
+                              "digest":"$check_02_aln_hash",
+                              "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)",
+                              "description":"$(params.ALN_STEP_NAME)"
+                            },
+                            {
+                              "name":"03-var",
+                              "producer":"aln-post",
+                              "type":"oss",
+                              "format":"dir",
+                              "url":"pkg:oss/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)?endpoint={{ .Release.OSS.S3.Endpoint }}&bucket={{ .Release.Workspace | default "bio-results" }}&usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}&isdir=true",
+                              "digest":"$check_03_var_hash",
+                              "displayName":"{{ .Release.Workspace | default "bio-results" }}/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)",
+                              "description":"$(params.VAR_DIR_NAME)"
+                            }                     
+                          ]
+                      }                    
                     EOF
         results:
           - name: shipper-artifacts
