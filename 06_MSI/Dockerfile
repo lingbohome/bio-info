@@ -51,7 +51,11 @@ tar -xzvf fastahack-1.0.0.tar.gz && \
 rm fastahack-1.0.0.tar.gz && \
 cd fastahack-1.0.0 && \
 make && mkdir -p $SOFT/fastahack && mv fastahack $FASTAHACK && \
-cd ../ && rm -rf fastahack-1.0.0/     
+cd ../ && rm -rf fastahack-1.0.0/  
+
+ADD requirements.txt $SOFT/MSIFinder-master/
+RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
+RUN pip install -r $SOFT/MSIFinder-master/requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 
 # 设置工作目录
 WORKDIR /data

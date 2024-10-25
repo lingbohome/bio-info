@@ -143,8 +143,8 @@ data:
                   image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-qc:v0.3.2
                   name: sample-qc
                   args:
-                    - '-f$(workspaces.source.path)/RawData/FA240204102_CL01211_R1_001.fastq.gz'
-                    - '-r$(workspaces.source.path)/RawData/FA240204102_CL01211_R2_001.fastq.gz'
+                    - '-f$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R1_Fastq_File)'
+                    - '-r$(workspaces.source.path)/$(PARAM_INPUT)/$(params.R2_Fastq_File)'
                     - '-p$(params.Sample_Name)' 
                     - '-o$(workspaces.source.path)/$(PARAM_SUBWORKDIR)'                                      
                   script: |
@@ -262,7 +262,7 @@ data:
                     ##设置环境变量
                     export SOFT=/data1/workdir/software
                     export SAMTOOLS_1_8=$SOFT/samtools-1.8/bin/samtools
-                    export REF="$(workspaces.source.path)/index_files/human_g1k_v37"
+                    export REF="$(workspaces.source.path)/index_files_retry/human_g1k_v37.fasta"
                     ######例子
                     ####   sh /home/wangce/workdir/bin/ctDNA_v5/aln_ctDNA.sh  -f /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R1_clean.fq.gz  -r /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/01_QC/202411_CL02080.R2_clean.fq.gz  -t /home/wangce/workdir/database/humandb/panel/338genes_20210624.bed  -p 202411_CL02080  -o /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/02_aln  >>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.o  2>>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/02_aln_202411_CL02080.e
                     echo "Begin at:" `date`
@@ -340,7 +340,7 @@ data:
                     ##设置环境变量
                     export SOFT=/data1/workdir/software
                     export SAMTOOLS_1_8=$SOFT/samtools-1.8/bin/samtools
-                    export REF="$(workspaces.source.path)/index_files/human_g1k_v37.fasta"
+                    export REF="$(workspaces.source.path)/index_files_retry/human_g1k_v37.fasta"
                     ###例子
                     ### sh /home/wangce/workdir/bin/ctDNA_v5/snvIndel_calling_ctDNA_v2.sh  -t /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/02_aln/202411_CL02080.rmdup.target.bam  -l /home/wangce/workdir/database/humandb/panel/338genes_20210624.bed  -c /home/wangce/workdir/database/humandb/ctDNA_report/pon/panel338_Mutect2_2021/vcf/40samples.pon.vcf.gz  -p 202411_CL02080  -o /data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/03_var  >>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/03_snvInDel_calling_202411_CL02080.o  2>>/data3/Projects/panel338_2021/240428_A00582_1255_AHWWNGDSX7/scriptLog/03_snvInDel_calling_202411_CL02080.e
                     echo "*** Post alignment process by gencore-v0.14.0, picard-2.20.0 and samtools-v0.1.19 ***"
@@ -419,7 +419,7 @@ data:
                       value: "{{ .Release.BuilderName }}/02_aln/$(params.Sample_Name)"
                     - name: PARAM_03VARDIR
                       value: "{{ .Release.BuilderName }}/03_var/$(params.Sample_Name)"                                                                                                      
-                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.3.2
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.3.3
                   name: msi
                   args:
                     - '-n$(workspaces.source.path)/$(PARAM_03VARDIR)/$(params.Sample_Name).rmdup.bam'
@@ -468,7 +468,7 @@ data:
                         esac
                     done
 
-                    export REF="$(workspaces.source.path)/index_files/human_g1k_v37.fasta"
+                    export REF="$(workspaces.source.path)/index_files_retry/human_g1k_v37.fasta"
 
                     echo "Begin at:" `date`
                     ## sleep 36000
@@ -488,7 +488,9 @@ data:
                     echo "*** Analysis by MSIsensor-pro ***"
                     ###加载动态库
                     export LD_LIBRARY_PATH=/data1/workdir/software/anaconda3/lib:$LD_LIBRARY_PATH
-                    $MSISENSOR_PRO pro -d $baseline_for_msisensor_pro -t $tumor_bam -o $outDir/$sampleID
+                    $MSISENSOR_PRO scan  -d $REF -o $outDir/$sampleID.reference.list
+                    $MSISENSOR_PRO pro -d $outDir/$sampleID.reference.list -t $tumor_bam -o $outDir/$sampleID 2>$outDir/$sampleID.microsatellite.err 1>$outDir/$sampleID.microsatellite.log
+                    # $MSISENSOR_PRO pro -d $baseline_for_msisensor_pro -t $tumor_bam -o $outDir/$sampleID
                     msisensor_pro_score=`cat $outDir/$sampleID | tail -1 | cut -f 3`
                     msisensor_pro_judge=`echo "$msisensor_pro_score > 20" | bc`
                     echo -e "MSIsensor-pro_Status" > $outDir/$sampleID.msisensor-pro
@@ -582,16 +584,16 @@ data:
                     mc alias set oss $schema://{{- .Release.OSS.S3.Endpoint | default "minioserver.example.net" }} {{ .Release.OSS.S3.AccessKey }} {{ .Release.OSS.S3.SecretKey }} 
                     mc mb oss/$bucket  --ignore-existing
 
-                    check_00_inputs_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    check_00_inputs_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}')
                     mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/
 
-                    check_01_qc_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    check_01_qc_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}')
                     mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.QC_STEP_NAME)/$(params.Sample_Name)/
 
-                    check_02_aln_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    check_02_aln_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}')
                     mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.ALN_STEP_NAME)/$(params.Sample_Name)/                     
 
-                    check_03_var_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum)
+                    check_03_var_hash=sha256:$(find $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/ -type f -exec sha256sum {} \; | sort -k 2 | sha256sum | awk '{print $1}')
                     mc cp --recursive $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/ oss/$bucket/{{ .Release.Namespace }}/{{ .Release.BuilderName }}/$(params.VAR_DIR_NAME)/$(params.Sample_Name)/                    
                  
                     cat > $(results.ArtifactInfo.path) << EOF
