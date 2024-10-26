@@ -419,7 +419,7 @@ data:
                       value: "{{ .Release.BuilderName }}/02_aln/$(params.Sample_Name)"
                     - name: PARAM_03VARDIR
                       value: "{{ .Release.BuilderName }}/03_var/$(params.Sample_Name)"                                                                                                      
-                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.3.3
+                  image: registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-msi:v0.4.1
                   name: msi
                   args:
                     - '-n$(workspaces.source.path)/$(PARAM_03VARDIR)/$(params.Sample_Name).rmdup.bam'
@@ -572,6 +572,8 @@ data:
                   script: |
                     #!/usr/bin/env bash
                     set -e
+
+                    rm -rf  $(workspaces.source.path)/{{ .Release.BuilderName }}/$(params.INPUTS_DIR_NAME)/.git
 
                     usehttps={{- .Release.OSS.S3.UseHttps | default "false" }}
                     bucket={{ .Release.Workspace | default "bio-poc-data" }}

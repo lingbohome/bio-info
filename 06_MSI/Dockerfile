@@ -1,11 +1,13 @@
 FROM registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-aln:v0.2
 WORKDIR /data1
 
+RUN apt-get update && apt-get install -y python3-pip libhts-dev bc libstdc++6 &&  rm -rf /var/lib/apt/lists/*
+
 ENV MSISENSOR $SOFT/msisensor/msisensor
 ENV MSISENSOR_PRO $SOFT/msisensor-pro/msisensor-pro
 
 RUN mkdir -p $SOFT/msisensor && wget https://github.com/ding-lab/msisensor/releases/download/0.6/msisensor.linux -O $MSISENSOR && chmod a+x $MSISENSOR
-RUN apt-get update && apt-get install -y libhts-dev
+
 RUN mkdir -p $SOFT/msisensor-pro && wget https://github.com/xjtu-omics/msisensor-pro/releases/download/v1.3.0/msisensor-pro-v1.3.0 -O $MSISENSOR_PRO && chmod a+x $MSISENSOR_PRO
 ##ENV LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu/libhts.so::$LD_LIBRARY_PATH    
 
@@ -17,16 +19,8 @@ RUN mkdir -p $SOFT/msisensor-pro && wget https://github.com/xjtu-omics/msisensor
 #     ./INSTALL && mkdir -p $SOFT/msisensor-pro && mv binary/msisensor-pro $MSISENSOR_PRO && \
 #     cd ../ && rm -rf msisensor-pro-1.3.0/
 
-ENV MSIFINDER $SOFT/MSIFinder-master/MSIdetect_v3.py
-ADD MSIdetect_v3.py $SOFT/MSIFinder-master/
 
-# 赋予执行权限
-RUN chmod +x $MSIFINDER
 
-ENV MS_V2 $SOFT/msisensor/db/microsatellites_selected.list
-ADD microsatellites_selected.list $SOFT/msisensor/db/
-
-RUN apt-get update && apt-get install -y bc libstdc++6 && rm -rf /var/lib/apt/lists/*
 # ENV CONDA_DIR $SOFT/anaconda3
 # RUN wget --quiet https://repo.anaconda.com/archive/Anaconda3-2023.09-0-Linux-x86_64.sh -O ~/anaconda.sh && \
 #     /bin/bash ~/anaconda.sh -b -p $CONDA_DIR && \
@@ -51,11 +45,17 @@ tar -xzvf fastahack-1.0.0.tar.gz && \
 rm fastahack-1.0.0.tar.gz && \
 cd fastahack-1.0.0 && \
 make && mkdir -p $SOFT/fastahack && mv fastahack $FASTAHACK && \
-cd ../ && rm -rf fastahack-1.0.0/  
+cd ../ && rm -rf fastahack-1.0.0/
 
+ENV MS_V2 $SOFT/msisensor/db/microsatellites_selected.list
+ADD microsatellites_selected.list $SOFT/msisensor/db/
+
+ENV MSIFINDER $SOFT/MSIFinder-master/MSIdetect_v3.py
+ADD *.py $SOFT/MSIFinder-master/
 ADD requirements.txt $SOFT/MSIFinder-master/
-RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip install -r $SOFT/MSIFinder-master/requirements.txt -i https://mirrors.aliyun.com/pypi/simple
+
+RUN chmod +x $MSIFINDER
 
 # 设置工作目录
 WORKDIR /data

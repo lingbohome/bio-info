@@ -9,3 +9,7 @@
 docker run -it --rm -v /root/lingbo/bio/poc/data:/data  --name bio-demo --entrypoint bash registry.cn-shanghai.aliyuncs.com/bio-cloud/bioinfo-aln:v0.2
 ```
 
+### 生成python依赖
+```bash 
+pipreqs .\06_MSI\ --force
+```
